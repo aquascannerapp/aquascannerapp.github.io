@@ -1,0 +1,10 @@
+Create Directories:
+
+mkdir C:\AquaApps\AquaScannerApp
+mkdir C:\AquaApps\AquaScannerApp\public
+cd C:\AquaApps\AquaScannerApp
+Initialize Project & Install Packages:
+
+npm init -y
+npm install express mssql body-parser cors
+npm install pm2 -g

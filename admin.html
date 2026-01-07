@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Segoe UI, sans-serif; padding: 30px; background: #f4f4f9; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #007bff; color: white; }
+        .status-Success { color: green; font-weight: bold; }
+        .status-NotFound { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>📊 Aqua Scanner App Monitor (Test)</h1>
+    <button onclick="loadLogs()" style="padding:10px 20px; cursor:pointer;">Refresh Logs</button>
+    <br><br>
+    <table>
+        <thead>
+            <tr><th>Time</th><th>Barcode</th><th>Status</th><th>Message</th></tr>
+        </thead>
+        <tbody id="logs-body"></tbody>
+    </table>
+
+    <script>
+        async function loadLogs() {
+            const res = await fetch('/api/logs');
+            const logs = await res.json();
+            const tbody = document.getElementById('logs-body');
+            tbody.innerHTML = '';
+
+            logs.forEach(log => {
+                const row = `<tr>
+                    <td>${new Date(log.ScanTime).toLocaleTimeString()}</td>
+                    <td>${log.BarcodeScanned}</td>
+                    <td class="status-${log.ScanStatus}">${log.ScanStatus}</td>
+                    <td>${log.Message}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+        loadLogs();
+        setInterval(loadLogs, 5000); // Auto-refresh every 5s
+    </script>
+</body>
+</html>

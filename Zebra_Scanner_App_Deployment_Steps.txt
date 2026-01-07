@@ -1,0 +1,348 @@
+==============================================================================
+DEPLOYMENT GUIDE: ZEBRA TC53e NODE.JS SCANNER APP
+==============================================================================
+App Name: AquaScannerApp
+Port: 5050
+Database: ZebraInventoryDB
+Server Path: C:\AquaApps\AquaScannerApp
+
+------------------------------------------------------------------------------
+PHASE 1: DATABASE CREATION (SQL SERVER)
+------------------------------------------------------------------------------
+Run the following script in SQL Server Management Studio (SSMS) to create the
+database and seed it with test data.
+
+-- START SQL SCRIPT --
+IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'ZebraInventoryDB')
+BEGIN
+    CREATE DATABASE ZebraInventoryDB;
+END
+GO
+
+USE ZebraInventoryDB;
+GO
+
+-- Create Products Table
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Products')
+BEGIN
+    CREATE TABLE Products (
+        ProductID INT IDENTITY(1,1) PRIMARY KEY,
+        Barcode VARCHAR(50) NOT NULL UNIQUE,
+        Name VARCHAR(100) NOT NULL,
+        SKU VARCHAR(50),
+        Price DECIMAL(10, 2)
+    );
+END
+
+-- Create ScanLogs Table
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ScanLogs')
+BEGIN
+    CREATE TABLE ScanLogs (
+        LogID INT IDENTITY(1,1) PRIMARY KEY,
+        BarcodeScanned VARCHAR(50),
+        ScanStatus VARCHAR(20),
+        Message VARCHAR(255),
+        ScanTime DATETIME DEFAULT GETDATE()
+    );
+END
+GO
+
+-- Seed Test Data
+TRUNCATE TABLE Products;
+INSERT INTO Products (Barcode, Name, SKU, Price) VALUES
+('1001', 'Zebra TC53e Scanner', 'ZEB-001', 500.00),
+('1002', 'Wireless Access Point', 'WAP-X99', 120.50),
+('1003', 'Industrial Label Printer', 'PRT-400', 850.00),
+('1004', 'USB-C Cable (3ft)', 'CBL-003', 15.99);
+GO
+-- END SQL SCRIPT --
+
+
+------------------------------------------------------------------------------
+PHASE 2: SERVER SETUP (WINDOWS POWERSHELL)
+------------------------------------------------------------------------------
+Open PowerShell as Administrator and run the following commands:
+
+1. Create Directory:
+   mkdir C:\AquaApps\AquaScannerApp
+   mkdir C:\AquaApps\AquaScannerApp\public
+   cd C:\AquaApps\AquaScannerApp
+
+2. Install Dependencies:
+   npm init -y
+   npm install express mssql body-parser cors
+   npm install pm2 -g
+
+
+------------------------------------------------------------------------------
+PHASE 3: CREATE SERVER FILES
+------------------------------------------------------------------------------
+Create the following files inside C:\AquaApps\AquaScannerApp
+
+FILE: server.js
+(Copy and paste the code below)
+-------------------------------------------------------
+const express = require('express');
+const bodyParser = require('body-parser');
+const sql = require('mssql');
+const path = require('path');
+const cors = require('cors');
+
+const app = express();
+const PORT = 5050;
+
+app.use(cors());
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// DB CONFIGURATION - UPDATE PASSWORD HERE
+const dbConfig = {
+    user: 'sa',            
+    password: 'yourPassword', 
+    server: 'localhost',   
+    database: 'ZebraInventoryDB',
+    options: {
+        encrypt: false, 
+        trustServerCertificate: true 
+    }
+};
+
+// API: Process Scan
+app.post('/api/scan', async (req, res) => {
+    const { barcode } = req.body;
+    let pool;
+    try {
+        pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .input('code', sql.VarChar, barcode)
+            .query('SELECT * FROM Products WHERE Barcode = @code');
+
+        if (result.recordset.length > 0) {
+            const product = result.recordset[0];
+            await pool.request()
+                .input('code', sql.VarChar, barcode)
+                .input('status', sql.VarChar, 'Success')
+                .input('msg', sql.VarChar, `Found: ${product.Name}`)
+                .query('INSERT INTO ScanLogs (BarcodeScanned, ScanStatus, Message) VALUES (@code, @status, @msg)');
+
+            res.json({ success: true, product: product });
+        } else {
+            await pool.request()
+                .input('code', sql.VarChar, barcode)
+                .input('status', sql.VarChar, 'NotFound')
+                .input('msg', sql.VarChar, 'Item not in database')
+                .query('INSERT INTO ScanLogs (BarcodeScanned, ScanStatus, Message) VALUES (@code, @status, @msg)');
+
+            res.json({ success: false, message: 'Item Not Found' });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: 'Database Error' });
+    } finally {
+        if (pool) pool.close();
+    }
+});
+
+// API: Get Logs
+app.get('/api/logs', async (req, res) => {
+    let pool;
+    try {
+        pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            SELECT TOP 50 LogID, BarcodeScanned, ScanStatus, Message, ScanTime 
+            FROM ScanLogs ORDER BY ScanTime DESC
+        `);
+        res.json(result.recordset);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'DB Error' });
+    } finally {
+        if (pool) pool.close();
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+-------------------------------------------------------
+
+
+FILE: ecosystem.config.js
+-------------------------------------------------------
+module.exports = {
+  apps : [{
+    name   : "AquaScannerApp",
+    script : "server.js",
+    watch: false,
+    autorestart: false, 
+    env: {
+      NODE_ENV: "production",
+      PORT: 5050
+    }
+  }]
+}
+-------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+PHASE 4: CREATE FRONTEND FILES
+------------------------------------------------------------------------------
+Create the following files inside C:\AquaApps\AquaScannerApp\public
+
+FILE: public/index.html (The Scanner Interface)
+-------------------------------------------------------
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aqua Scanner</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; text-align: center; transition: background 0.3s; }
+        input { width: 80%; padding: 15px; font-size: 1.2rem; margin-bottom: 20px; border: 2px solid #007bff; }
+        .success { background-color: #d4edda; }
+        .error { background-color: #f8d7da; }
+        #result-area { margin-top: 20px; font-size: 1.5rem; font-weight: bold; }
+        .info { font-size: 1rem; color: #555; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <h2>Aqua Scanner</h2>
+    <input type="text" id="barcode-input" inputmode="none" placeholder="Scan..." autofocus autocomplete="off">
+    <div id="result-area">Ready</div>
+    <div id="product-details" class="info"></div>
+
+    <script>
+        const input = document.getElementById('barcode-input');
+        const resultArea = document.getElementById('result-area');
+        const details = document.getElementById('product-details');
+
+        // Sticky Focus: Ensure cursor is always in the box
+        input.addEventListener('blur', () => setTimeout(() => input.focus(), 20));
+
+        input.addEventListener('keypress', async (e) => {
+            if (e.key === 'Enter') {
+                const barcode = input.value;
+                input.value = ''; 
+                
+                try {
+                    const res = await fetch('/api/scan', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ barcode })
+                    });
+                    const data = await res.json();
+
+                    if (data.success) {
+                        document.body.className = 'success';
+                        resultArea.innerText = "SUCCESS";
+                        resultArea.style.color = "green";
+                        details.innerText = `${data.product.Name} ($${data.product.Price})`;
+                        if (navigator.vibrate) navigator.vibrate(200);
+                    } else {
+                        document.body.className = 'error';
+                        resultArea.innerText = "NOT FOUND";
+                        resultArea.style.color = "red";
+                        details.innerText = "";
+                        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                    }
+                    setTimeout(() => document.body.className = '', 1000);
+                } catch (err) {
+                    resultArea.innerText = "Network Error";
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+-------------------------------------------------------
+
+
+FILE: public/admin.html (The Dashboard)
+-------------------------------------------------------
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <style>
+        body { font-family: Segoe UI, sans-serif; padding: 30px; background: #f4f4f9; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background: #007bff; color: white; }
+        .status-Success { color: green; font-weight: bold; }
+        .status-NotFound { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>📊 Scan Monitor (Port 5050)</h1>
+    <button onclick="loadLogs()">Refresh Logs</button>
+    <br><br>
+    <table>
+        <thead><tr><th>Time</th><th>Barcode</th><th>Status</th><th>Message</th></tr></thead>
+        <tbody id="logs-body"></tbody>
+    </table>
+    <script>
+        async function loadLogs() {
+            const res = await fetch('/api/logs');
+            const logs = await res.json();
+            const tbody = document.getElementById('logs-body');
+            tbody.innerHTML = '';
+            logs.forEach(log => {
+                const row = `<tr>
+                    <td>${new Date(log.ScanTime).toLocaleTimeString()}</td>
+                    <td>${log.BarcodeScanned}</td>
+                    <td class="status-${log.ScanStatus}">${log.ScanStatus}</td>
+                    <td>${log.Message}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+        loadLogs();
+        setInterval(loadLogs, 5000);
+    </script>
+</body>
+</html>
+-------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+PHASE 5: DEPLOYMENT & FIREWALL
+------------------------------------------------------------------------------
+Run these commands in PowerShell (Administrator):
+
+1. Start the application with PM2:
+   pm2 start ecosystem.config.js
+
+2. Verify it is running:
+   pm2 list
+
+3. Set up Auto-Startup (so it runs after reboot):
+   pm2 save
+   pm2 startup
+
+4. Open Port 5050 in Windows Firewall:
+   New-NetFirewallRule -DisplayName "Aqua Scanner App" -Direction Inbound -LocalPort 5050 -Protocol TCP -Action Allow
+
+
+------------------------------------------------------------------------------
+PHASE 6: ZEBRA TC53e CONFIGURATION & TESTING
+------------------------------------------------------------------------------
+
+STEP A: Configure DataWedge (Crucial for Scanner to work)
+1. Open the "DataWedge" app on the device.
+2. Tap "Profile0 (default)".
+3. Scroll to "Keystroke output" -> "Basic data formatting".
+4. CHECK "Send ENTER key".
+
+STEP B: Load the App
+1. Connect TC53e to Wi-Fi.
+2. Open Chrome.
+3. Navigate to: http://www.aqua-aerobic.net:5050/
+
+STEP C: Test
+1. Scan barcode "1001" (Should show SUCCESS/Green).
+2. Scan random item (Should show NOT FOUND/Red).
+3. Check Dashboard at http://www.aqua-aerobic.net:5050/admin.html to verify logs.

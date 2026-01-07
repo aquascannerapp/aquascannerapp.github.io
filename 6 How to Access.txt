@@ -1,0 +1,4 @@
+How to Access
+Scanner App: Open http://YOUR_SERVER_IP:5050 on the TC53e.
+
+Dashboard: Open http://YOUR_SERVER_IP:5050/admin.html on your PC.

@@ -1,0 +1,9 @@
+CD C:\AquaApps\AquaScannerApp
+
+pm2 start ecosystem.config.js
+Verify it is running:
+
+pm2 list
+(You should see "AquaScannerApp" with status "online")
+pm2 save
+pm2 startup
