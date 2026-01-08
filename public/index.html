@@ -2,261 +2,526 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Aqua Job Picker</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
     <style>
-        body { font-family: sans-serif; padding: 5px; text-align: center; background-color: #f8f9fa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 10px; text-align: center; background-color: #f4f6f8; }
         
-        /* Global Input Style (for Order Scan) */
-        input { width: 90%; padding: 15px; font-size: 1.2rem; border: 2px solid #007bff; border-radius: 5px; margin-bottom: 10px; }
-        
-        /* Buttons */
-        .btn-main { padding: 15px; width: 95%; background: #007bff; color: white; font-size: 1.2rem; border: none; border-radius: 5px; margin-top: 10px; }
-        .btn-job { padding: 15px; width: 100%; background: white; border: 1px solid #ddd; margin-bottom: 10px; text-align: left; font-size: 1.1rem; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .btn-back { padding: 8px 15px; background: #6c757d; color: white; border: none; border-radius: 4px; float: left; margin-bottom: 10px; }
-        
-        /* GO Button */
-        .btn-go {
-            background-color: #007bff; color: white;
-            border: none; border-radius: 4px;
-            padding: 8px 12px;
-            font-weight: bold; font-size: 1rem;
-            cursor: pointer;
+        input { 
+            width: 100%; padding: 12px; font-size: 1.1rem; 
+            border: 1px solid #ced4da; border-radius: 6px; 
+            margin-bottom: 15px; box-sizing: border-box; 
         }
-        .btn-go:active { background-color: #0056b3; }
+        #user-input { border-color: #6c757d; background-color: #fff; font-family: monospace; }
 
-        /* Table Styles */
-        table { width: 100%; border-collapse: collapse; margin-top: 5px; background: white; font-size: 0.80rem; table-layout: fixed; }
-        th, td { border: 1px solid #ddd; padding: 3px; text-align: center; vertical-align: middle; word-wrap: break-word; }
-        th { background-color: #343a40; color: white; }
-        td { text-align: center; } 
-        td.part-cell { text-align: left; } 
+        button { cursor: pointer; border: none; border-radius: 6px; font-weight: 600; transition: background 0.2s; }
+        .btn-main { padding: 15px; width: 100%; background: #007bff; color: white; font-size: 1.2rem; margin-top: 10px; }
+        .btn-main:hover { background: #0069d9; }
+
+        .btn-job { 
+            padding: 15px; width: 100%; background: white; border: 1px solid #dee2e6; 
+            margin-bottom: 10px; text-align: left; font-size: 1.1rem; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05); 
+        }
+        .btn-job:active { background-color: #f1f3f5; }
+
+        .nav-row { 
+            display: flex; justify-content: space-between; align-items: center; 
+            margin-bottom: 15px; gap: 10px; 
+            padding-right: 110px; 
+            box-sizing: border-box;
+        }
+        .btn-back { padding: 10px 15px; background: #6c757d; color: white; font-size: 1rem; }
+        .btn-new-order { padding: 10px 15px; background: #17a2b8; color: white; font-size: 1rem; }
+        .btn-view-toggle { padding: 10px 15px; background: #6610f2; color: white; font-size: 1rem; }
+        .btn-print { padding: 10px 15px; background: #343a40; color: white; font-size: 1rem; display: none; }
+
+        .btn-select { 
+            background-color: #6c757d; color: white; 
+            padding: 10px 5px; 
+            font-size: 0.9rem; width: 100%; white-space: nowrap; 
+        }
+        .btn-confirm { 
+            background-color: #28a745 !important; color: white; padding: 10px 10px; 
+            font-size: 1rem; width: 100%; animation: pulse 1s infinite; 
+        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+
+        .qty-input { width: 100%; padding: 8px; font-size: 1.1rem; text-align: center; margin-bottom: 0; display: none; }
+        .qty-select { width: 100%; padding: 5px; font-size: 0.95rem; height: 38px; border: 1px solid #ced4da; border-radius: 4px; background-color: white; text-align: center; }
+        .toggle-btn { background: none; border: 1px solid #ccc; color: #666; padding: 5px 8px; font-size: 0.8rem; margin-left: 5px; display: none; min-width: 30px; }
         
-        /* --- FIXED: WIDER QUANTITY INPUT --- */
-        .qty-input { 
-            width: 70px; /* Increased from 40px */
-            padding: 5px; 
-            font-size: 1.1rem; 
-            text-align: center; 
-            border: 1px solid #ccc; 
-            border-radius: 4px; 
+        .barcode-svg { height: 50px; margin-top: 50px; display: block; margin-left: auto; margin-right: auto; background-color: white; }
+
+        .info-box {
+            background:#fff; padding:10px; border-radius:6px; border:1px solid #eee; margin-bottom:15px;
+            box-sizing: border-box; width: 100%;
         }
 
-        /* Pick States */
-        tr.picked { background-color: #d4edda !important; } 
-        tr.wrong-scan { animation: flashRed 0.5s; }
+        /* --- CARD VIEW --- */
+        body:not(.scanner-mode) table { 
+            width: 100%; border-collapse: separate; border-spacing: 0 12px; margin-top: 5px; 
+            font-size: 0.9rem; table-layout: fixed; background-color: transparent; 
+        }
+        body:not(.scanner-mode) th { 
+            background-color: transparent; color: #495057; font-weight: 700; 
+            text-transform: uppercase; font-size: 0.8rem; border: none; padding: 0 10px 5px 10px; 
+        }
+        body:not(.scanner-mode) tbody td { 
+            background-color: white; border-top: 1px solid #dee2e6; border-bottom: 1px solid #dee2e6; 
+            padding: 12px 10px; vertical-align: middle; word-wrap: break-word; 
+        }
+        body:not(.scanner-mode) tbody td:first-child { 
+            border-left: 1px solid #dee2e6; border-top-left-radius: 8px; border-bottom-left-radius: 8px; 
+        }
+        body:not(.scanner-mode) tbody td:last-child { 
+            border-right: 1px solid #dee2e6; border-top-right-radius: 8px; border-bottom-right-radius: 8px; 
+        }
+        body:not(.scanner-mode) tbody tr { transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        body:not(.scanner-mode) tbody tr:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        
+        /* Row Colors */
+        body:not(.scanner-mode) tr.picked td { background-color: #d4edda !important; border-color: #c3e6cb; opacity: 0.7; }
+        
+        /* NEW: Partial Pick Styling (Amber) */
+        body:not(.scanner-mode) tr.partial-pick td { background-color: #fff3cd !important; border-color: #ffeeba; }
 
-        .screen { display: none; }
+        /* --- SCANNER VIEW --- */
+        body.scanner-mode table { border-collapse: collapse; box-shadow: none; border: 2px solid #000; width: 100%; box-sizing: border-box; }
+        body.scanner-mode .interactive-col { display: none !important; }
+        body.scanner-mode .part-cell { width: auto !important; }
+        body.scanner-mode th { background-color: #eee; color: #000; border: 1px solid #000; padding: 10px; }
+        body.scanner-mode td { border: 1px solid #000; padding: 15px; background-color: white; border-radius: 0 !important; }
+        
+        body.scanner-mode tr.picked td { background-color: #d4edda !important; opacity: 1; text-decoration: none; }
+        body.scanner-mode tr.partial-pick td { background-color: #fff3cd !important; } /* Amber in Scanner Mode */
+
+        body.scanner-mode #scan-input, body.scanner-mode #status-msg { display: none; }
+
+        body.scanner-mode .screen { max-width: 100% !important; margin: 0; }
+        body.scanner-mode .info-box {
+            border: 2px solid #000 !important; border-radius: 0 !important;
+            box-shadow: none !important; background-color: #fff !important;
+            margin-bottom: 0; border-bottom: none; width: 100%;
+        }
+        body.scanner-mode .info-box * { color: #000 !important; } 
+
+        @media print {
+            .admin-link, .nav-row, .btn-main, #user-input, #order-input, h2, #scan-input, #status-msg { display: none !important; }
+            .screen { display: block !important; margin: 0; max-width: 100%; }
+            body { background-color: white; padding: 0; }
+            #pick-table { width: 100%; font-size: 12px; border: 2px solid #000; }
+            td { border: 1px solid #000 !important; }
+            .barcode-svg { height: 60px; margin: 10px auto; }
+            .interactive-col, .col-rem { display: none !important; }
+            .info-box { border: 2px solid #000 !important; border-radius: 0; border-bottom: none; }
+            tr.picked td { background-color: #d4edda !important; -webkit-print-color-adjust: exact; }
+            tr.partial-pick td { background-color: #fff3cd !important; -webkit-print-color-adjust: exact; }
+        }
+
+        .screen { display: none; margin-top: 50px; max-width: 800px; margin-left: auto; margin-right: auto; }
         .active { display: block; }
-        @keyframes flashRed { 0% { background-color: #f8d7da; } 100% { background-color: #f8f9fa; } }
+
+        .admin-link { 
+            position: fixed; top: max(10px, env(safe-area-inset-top)); right: 10px; 
+            text-decoration: none; font-weight: bold; padding: 6px 12px; 
+            background: white; border: 1px solid #ddd; border-radius: 4px; color: #6c757d; 
+            z-index: 2147483647; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transform: translateZ(0); 
+        }
+        
+        #loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.95); z-index:2000; display:none; flex-direction:column; justify-content:center; align-items:center; }
+        #loading-overlay.active { display: flex; }
+        .spinner { width: 50px; height: 50px; border: 5px solid #e9ecef; border-top: 5px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        tr.wrong-scan td { animation: flashRed 0.5s; }
+        @keyframes flashRed { 0% { background-color: #f8d7da; } 100% { background-color: #ffffff; } }
+
+        @media (max-width: 768px) {
+            body { padding: 5px; } .screen { margin-top: 60px; }
+            #btn-toggle-view { display: none !important; } 
+            
+            body:not(.scanner-mode) table { border-collapse: collapse; background: transparent; }
+            body:not(.scanner-mode) table, body:not(.scanner-mode) thead, body:not(.scanner-mode) tbody, body:not(.scanner-mode) th, body:not(.scanner-mode) td, body:not(.scanner-mode) tr { display: block; }
+            body:not(.scanner-mode) thead tr { position: absolute; top: -9999px; left: -9999px; }
+            body:not(.scanner-mode) tr { margin-bottom: 15px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 15px 15px 0 15px; transform: none !important; }
+            body:not(.scanner-mode) td { border: none !important; border-bottom: 1px solid #f8f9fa !important; border-radius: 0 !important; padding: 5px 0; text-align: left !important; display: flex; justify-content: space-between; align-items: center; }
+            body:not(.scanner-mode) td:last-child { border-bottom: none !important; }
+            body:not(.scanner-mode) td:before { content: attr(data-label); font-weight: bold; color: #6c757d; font-size: 0.85rem; margin-right: 10px; min-width: 60px; }
+            
+            body:not(.scanner-mode) td.part-cell { order: -1; display: block; text-align: center !important; background: #f8f9fa; margin: 0 -15px 15px -15px; padding: 15px; border-bottom: 1px solid #dee2e6 !important; border-radius: 8px 8px 0 0 !important; }
+            body:not(.scanner-mode) td.part-cell:before { display: none; }
+            body:not(.scanner-mode) .barcode-svg { height: 45px; margin-top: 5px; }
+        }
     </style>
 </head>
 <body>
 
-    <div id="screen-order" class="screen active" style="margin-top: 50px;">
-        <h2>Job Material Picker</h2>
-        <input type="number" id="order-input" placeholder="Scan or Enter Order Number" autofocus>
+    <a href="admin.html" class="admin-link" onclick="setMonitorFlag()">Monitor ↗</a>
+
+    <div id="loading-overlay"><div class="spinner"></div><div style="font-size:1.2rem; color:#555; font-weight:bold;">Loading...</div></div>
+
+    <div id="screen-order" class="screen active">
+        <h2>Aqua Job Material Picker</h2>
+        <input type="text" id="user-input" placeholder="Enter Aqua Network ID (e.g. ckonkol)" autofocus>
+        <input type="number" id="order-input" placeholder="Scan/Enter Order Number">
         <button onclick="fetchJobs()" class="btn-main">FIND JOBS</button>
     </div>
 
     <div id="screen-jobs" class="screen">
-        <button onclick="showScreen('screen-order')" class="btn-back">← Back</button>
-        <h3>Order: <span id="display-order"></span></h3>
+        <div class="nav-row">
+            <button onclick="goBackToOrder()" class="btn-back">← Change Order</button>
+        </div>
+        <h3 style="border-bottom:1px solid #eee; padding-bottom:10px;">Order: <span id="display-order" style="color:#007bff;"></span></h3>
         <div id="job-list-container"></div>
     </div>
 
     <div id="screen-picking" class="screen">
-        <button onclick="showScreen('screen-jobs')" class="btn-back">← Jobs</button>
-        <div style="clear:both; margin-bottom:5px;">
-            <h3 style="margin:0;">Job: <span id="display-job"></span></h3>
+        <div class="nav-row">
+            <div style="display:flex; gap:5px;">
+                <button onclick="goBackToJobs()" class="btn-back">← Jobs</button>
+                <button onclick="toggleScannerView()" id="btn-toggle-view" class="btn-view-toggle">Scanner View</button>
+                <button onclick="window.print()" class="btn-print">Print List</button>
+            </div>
+            <button onclick="goBackToOrder()" class="btn-new-order">Change Order ⟲</button>
         </div>
 
-        <input type="text" id="scan-input" inputmode="none" placeholder="Scan Barcode..." autocomplete="off">
-        <div id="status-msg" style="font-weight:bold; height:20px;"></div>
+        <div class="info-box">
+            <div style="font-weight:bold; font-size:1.1rem;">
+                Job: <span id="display-job" style="color:#007bff;"></span>
+                <span style="margin-left:15px; color:#444; font-size:1rem;">Order: <span id="display-order-pick"></span></span>
+            </div>
+            <div id="display-user" style="font-size:0.9rem; color:#666; margin-top:5px;"></div>
+        </div>
+
+        <input type="text" id="scan-input" inputmode="none" placeholder="Scan Barcode OR Search Part..." autocomplete="off" style="border: 2px solid #007bff; text-align:center;">
+        <div id="status-msg" style="font-weight:bold; height:25px; text-align:center; margin-bottom:10px;"></div>
 
         <table id="pick-table">
             <thead>
                 <tr>
-                    <th style="width: 30px;">Ln</th>
-                    <th style="width: 30px;">Asm</th>
-                    <th style="width: 30px;">Mtl</th>
-                    <th>Part / Barcode</th> <th style="width: 35px;">Req</th>
-                    <th style="width: 35px;">Iss</th>
-                    <th style="width: 80px;">Pick</th>
-                    <th style="width: 45px;">ACT</th>
+                    <th style="width: 40px;">Ln</th>
+                    <th style="width: 40px;">Asm</th>
+                    <th style="width: 40px;">Mtl</th>
+                    <th>Part / Barcode</th> 
+                    <th style="width: 50px;">Req</th>
+                    <th style="width: 50px;">Iss</th>
+                    <th style="width: 50px;" class="col-rem">REM</th>
+                    <th style="width: 150px;" class="interactive-col">Pick</th>
+                    <th style="width: 100px;" class="interactive-col">ACT</th>
                 </tr>
             </thead>
             <tbody></tbody>
         </table>
+        <div style="height: 50px;"></div>
     </div>
 
     <script>
-        let currentOrder = '';
-        let currentJob = '';
+        let currentOrder = '', currentJob = '', currentNetworkID = '';
+        let activeRowBarcode = null, isScannerView = false, pollInterval = null;
+        // Global variable to track source
+        let currentSource = 'Browser'; 
+
+        const userInput = document.getElementById('user-input');
+        const orderInput = document.getElementById('order-input');
+
+        function setMonitorFlag() { sessionStorage.setItem('returningFromMonitor', 'true'); }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (sessionStorage.getItem('returningFromMonitor') === 'true') {
+                sessionStorage.removeItem('returningFromMonitor');
+                userInput.value = sessionStorage.getItem('aquaUser') || '';
+                currentNetworkID = userInput.value;
+                orderInput.value = sessionStorage.getItem('aquaOrder') || '';
+                if(orderInput.value) fetchJobs(sessionStorage.getItem('aquaJob'));
+            } else {
+                goBackToOrder();
+            }
+        });
 
         function showScreen(id) {
             document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
             document.getElementById(id).classList.add('active');
+            window.scrollTo(0,0);
         }
 
-        async function fetchJobs() {
-            const orderNum = document.getElementById('order-input').value;
-            if(!orderNum) return;
-            currentOrder = orderNum;
-            try {
-                const res = await fetch(`/api/jobs/${orderNum}`);
-                const data = await res.json();
-                if (data.success) renderJobs(data.data);
-                else alert(data.message);
-            } catch (err) { alert("Network Error"); }
+        function goBackToOrder() {
+            stopPolling();
+            sessionStorage.removeItem('aquaOrder'); sessionStorage.removeItem('aquaJob');
+            currentOrder = ''; currentJob = '';
+            showScreen('screen-order');
+            setTimeout(() => orderInput.focus(), 100);
         }
-
-        function renderJobs(jobs) {
-            const container = document.getElementById('job-list-container');
-            container.innerHTML = '';
-            document.getElementById('display-order').innerText = currentOrder;
-            jobs.forEach(job => {
-                const btn = document.createElement('button');
-                btn.className = 'btn-job';
-                btn.innerText = `Job: ${job.JobNum}`;
-                btn.onclick = () => loadPickList(job.JobNum);
-                container.appendChild(btn);
-            });
+        function goBackToJobs() {
+            stopPolling();
+            sessionStorage.removeItem('aquaJob');
+            currentJob = '';
             showScreen('screen-jobs');
         }
 
-        async function loadPickList(jobNum) {
-            currentJob = jobNum;
+        function startPolling() { if(pollInterval) clearInterval(pollInterval); pollInterval = setInterval(updateBackgroundData, 3000); }
+        function stopPolling() { if(pollInterval) clearInterval(pollInterval); pollInterval = null; }
+
+        function updateBackgroundData() {
+            if (!currentOrder || !currentJob) return;
+            fetch(`/api/picklist/${currentOrder}/${currentJob}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) return;
+                    data.data.forEach(part => {
+                        const row = document.getElementById(`row-${part.AssemblySeq}-${part.MtlSeq}`);
+                        if (!row) return;
+                        const remCell = document.getElementById(`rem-${part.AssemblySeq}-${part.MtlSeq}`);
+                        
+                        // NEW LOGIC: Rem = Req - (Iss + Sum(Picked from Logs))
+                        // We use 'part.PickedQty' assuming the backend returns the sum of logs as requested.
+                        // We fallback to 0 if the field is missing.
+                        const req = parseFloat(part.RequiredQty);
+                        const iss = parseFloat(part.IssuedQty);
+                        const pickedSum = parseFloat(part.PickedQty || 0);
+                        
+                        // Calculate Remaining based on the strict formula REQ - (ISS + LOGS)
+                        let remaining = req - (iss + pickedSum);
+                        if(remaining < 0) remaining = 0; // Prevent negative display
+
+                        if(remCell) remCell.innerText = remaining.toFixed(2);
+                        
+                        // LOGIC: Reset styles first
+                        row.classList.remove('picked', 'partial-pick');
+                        if(remCell) remCell.style.color = '#007bff';
+
+                        if(remaining <= 0) {
+                            row.classList.add('picked');
+                            if(remCell) remCell.style.color = 'green';
+                            const btn = row.querySelector('button[id^="act-"]');
+                            if(btn) { btn.innerText = 'Done'; btn.disabled = true; }
+                        } else if(remaining < req) {
+                            row.classList.add('partial-pick'); // Apply Amber
+                        }
+                    });
+                }).catch(e => {});
+        }
+
+        function toggleScannerView() {
+            isScannerView = !isScannerView;
+            document.body.classList.toggle('scanner-mode', isScannerView);
+            document.getElementById('btn-toggle-view').innerText = isScannerView ? "Interactive View" : "Scanner View";
+            document.querySelector('.btn-print').style.display = isScannerView ? 'inline-block' : 'none';
+            document.querySelectorAll('.barcode-svg').forEach(svg => {
+                svg.style.height = isScannerView ? '60px' : '50px';
+                svg.style.marginTop = isScannerView ? '10px' : '50px';
+            });
+        }
+
+        userInput.addEventListener('keypress', e => { if(e.key==='Enter') orderInput.focus(); });
+        orderInput.addEventListener('keypress', e => { if(e.key==='Enter') fetchJobs(); });
+
+        async function fetchJobs(autoJobNum = null) {
+            if(!userInput.value.trim()) { alert("Enter Network ID"); return; }
+            if(!orderInput.value) { alert("Enter Order #"); return; }
+            currentNetworkID = userInput.value; sessionStorage.setItem('aquaUser', currentNetworkID);
+            currentOrder = orderInput.value; sessionStorage.setItem('aquaOrder', currentOrder);
+            
+            document.getElementById('loading-overlay').classList.add('active');
             try {
-                const res = await fetch(`/api/picklist/${currentOrder}/${jobNum}`);
+                const res = await fetch(`/api/jobs/${currentOrder}`);
                 const data = await res.json();
-                if (data.success) renderTable(data.data);
-                else alert("No parts found.");
-            } catch (err) { alert("Network Error"); }
+                document.getElementById('loading-overlay').classList.remove('active');
+                if(data.success) {
+                    const container = document.getElementById('job-list-container');
+                    container.innerHTML = '';
+                    document.getElementById('display-order').innerText = currentOrder;
+                    data.data.forEach(job => {
+                        const btn = document.createElement('button');
+                        btn.className = 'btn-job'; btn.innerText = `Job: ${job.JobNum}`;
+                        btn.onclick = () => loadPickList(job.JobNum);
+                        container.appendChild(btn);
+                    });
+                    showScreen('screen-jobs');
+                    if(autoJobNum && data.data.some(j=>j.JobNum === autoJobNum)) loadPickList(autoJobNum);
+                } else alert(data.message);
+            } catch(e) { document.getElementById('loading-overlay').classList.remove('active'); alert("Network Error"); }
+        }
+
+        async function loadPickList(jobNum) {
+            currentJob = jobNum; sessionStorage.setItem('aquaJob', currentJob);
+            document.getElementById('loading-overlay').classList.add('active');
+            try {
+                const res = await fetch(`/api/picklist/${currentOrder}/${currentJob}`);
+                const data = await res.json();
+                document.getElementById('loading-overlay').classList.remove('active');
+                if(data.success) {
+                    renderTable(data.data);
+                    startPolling();
+                } else alert("No parts found.");
+            } catch(e) { document.getElementById('loading-overlay').classList.remove('active'); alert("Network Error"); }
         }
 
         function renderTable(parts) {
             document.getElementById('display-job').innerText = currentJob;
+            document.getElementById('display-order-pick').innerText = currentOrder;
+            document.getElementById('display-user').innerText = "User: " + currentNetworkID;
             const tbody = document.querySelector('#pick-table tbody');
-            tbody.innerHTML = '';
+            tbody.innerHTML = ''; activeRowBarcode = null;
 
             parts.forEach(part => {
                 const row = document.createElement('tr');
-                const barcodeText = `A${part.AssemblySeq}-M${part.MtlSeq}-${part.PartNum}`;
+                const bc = `A${part.AssemblySeq}~S${part.MtlSeq}~${part.PartNum}`;
                 const rowID = `row-${part.AssemblySeq}-${part.MtlSeq}`;
-                const inputID = `qty-${part.AssemblySeq}-${part.MtlSeq}`;
-                const safeBarcodeUrl = encodeURIComponent(barcodeText);
                 
-                let desc = part.detDescription || '';
-                if (desc.length > 75) desc = desc.substring(0, 75) + '...';
+                // NEW LOGIC INITIAL RENDER: Check if backend already sent PickedQty (sum of logs)
+                const reqQty = parseFloat(part.RequiredQty);
+                const issQty = parseFloat(part.IssuedQty);
+                const pickedSum = parseFloat(part.PickedQty || 0); // Logic assumes backend update
+                
+                let remaining = reqQty - (issQty + pickedSum);
+                if(remaining < 0) remaining = 0;
+                
+                row.id = rowID; row.dataset.barcode = bc; row.dataset.part = part.PartNum;
+                row.dataset.req = part.RequiredQty; row.dataset.iss = part.IssuedQty;
+                
+                // Color Logic
+                if(remaining <= 0) row.classList.add('picked');
+                else if(remaining < reqQty) row.classList.add('partial-pick');
 
-                row.id = rowID;
-                row.dataset.barcode = barcodeText;
-                row.dataset.part = part.PartNum;
-                row.dataset.picked = "false";
+                let opts = remaining > 0 ? `<option value="${remaining.toFixed(2)}">All (${remaining.toFixed(2)})</option>` : `<option value="0">0</option>`;
+                for(let i=1; i<=Math.floor(remaining); i++) if(i!==remaining) opts += `<option value="${i}">${i}</option>`;
+                opts += `<option value="manual">Manual...</option>`;
 
                 row.innerHTML = `
-                    <td style="font-weight:bold;">${part.OrderLine}</td>
-                    <td>${part.AssemblySeq}</td>
-                    <td>${part.MtlSeq}</td>
-                    <td class="part-cell">
-                        <div style="font-weight:bold;">${part.PartNum}</div>
-                        <div style="font-size:0.75em; color:#555;">${desc}</div>
-                        <img src="http://aquaerpapp/barcodes/idautomation-code128.aspx?D=${safeBarcodeUrl}&ST=T" 
-                             style="height:35px; margin-top:5px; max-width:100%;" loading="lazy">
+                    <td data-label="Ln" style="font-weight:bold;">${part.OrderLine}</td>
+                    <td data-label="Asm">${part.AssemblySeq}</td>
+                    <td data-label="Mtl">${part.MtlSeq}</td>
+                    <td data-label="Part / Barcode" class="part-cell">
+                        <div style="font-weight:bold; font-size:1.1rem; color:#2c3e50;">${part.PartNum}</div>
+                        <div style="font-size:0.85em; color:#666;">${part.detDescription?.substring(0,60)}</div>
+                        <svg id="svg-${part.AssemblySeq}-${part.MtlSeq}" class="barcode-svg"></svg>
                     </td>
-                    <td>${parseFloat(part.RequiredQty).toFixed(2)}</td>
-                    <td style="color:#666;">${parseFloat(part.IssuedQty).toFixed(2)}</td>
-                    <td>
-                        <input type="number" id="${inputID}" class="qty-input" 
-                               value="${parseFloat(part.RequiredQty).toFixed(2)}" 
-                               step="1" min="0">
+                    <td data-label="Req">${reqQty.toFixed(2)}</td>
+                    <td data-label="Iss" style="color:#666;">${parseFloat(part.IssuedQty).toFixed(2)}</td>
+                    <td data-label="REM" id="rem-${part.AssemblySeq}-${part.MtlSeq}" class="col-rem" style="color:${remaining<=0?'green':'#007bff'}; font-weight:bold;">${remaining.toFixed(2)}</td>
+                    
+                    <td data-label="Pick" class="pick-cell interactive-col">
+                        <div style="display:flex; justify-content:flex-end;">
+                            <select id="sel-${part.AssemblySeq}-${part.MtlSeq}" class="qty-select" onchange="handleQty('${part.AssemblySeq}','${part.MtlSeq}')" ${remaining<=0?'disabled':''}>${opts}</select>
+                            <input type="text" inputmode="decimal" id="qty-${part.AssemblySeq}-${part.MtlSeq}" class="qty-input" value="${remaining>0?remaining.toFixed(2):0}">
+                            <button id="btn-${part.AssemblySeq}-${part.MtlSeq}" class="toggle-btn" onclick="resetDrop('${part.AssemblySeq}','${part.MtlSeq}')">X</button>
+                        </div>
                     </td>
-                    <td>
-                        <button class="btn-go" onclick="triggerSubmit('${barcodeText}')">GO</button>
+                    <td data-label="ACT" class="interactive-col">
+                        <button id="act-${part.AssemblySeq}-${part.MtlSeq}" class="btn-select" onclick="activateRow('${bc}', 'Browser')" ${remaining<=0?'disabled':''}>${remaining<=0?'Done':'Select'}</button>
                     </td>
                 `;
                 tbody.appendChild(row);
+                try { JsBarcode(`#svg-${part.AssemblySeq}-${part.MtlSeq}`, bc, { format:"CODE128", width:1.8, height:50, displayValue:false, margin:15 }); } catch(e){}
             });
-
+            
             showScreen('screen-picking');
             setTimeout(() => document.getElementById('scan-input').focus(), 100);
         }
 
+        function handleQty(asm, mtl) {
+            const sel = document.getElementById(`sel-${asm}-${mtl}`);
+            const inp = document.getElementById(`qty-${asm}-${mtl}`);
+            const btn = document.getElementById(`btn-${asm}-${mtl}`);
+            if(sel.value === 'manual') { sel.style.display='none'; inp.style.display='block'; btn.style.display='block'; inp.focus(); }
+            else inp.value = sel.value;
+        }
+        function resetDrop(asm, mtl) {
+            const sel = document.getElementById(`sel-${asm}-${mtl}`);
+            const inp = document.getElementById(`qty-${asm}-${mtl}`);
+            const btn = document.getElementById(`btn-${asm}-${mtl}`);
+            inp.style.display='none'; btn.style.display='none'; sel.style.display='block'; sel.selectedIndex=0; inp.value=sel.value;
+        }
+
         const scanInput = document.getElementById('scan-input');
-        
-        // Smart Focus Logic: Don't steal focus if user clicks Input/Button
-        scanInput.addEventListener('blur', (e) => {
-            const newTarget = e.relatedTarget;
-            if (newTarget && (newTarget.tagName === 'INPUT' || newTarget.tagName === 'BUTTON')) {
-                return;
-            }
-            setTimeout(() => {
-                const active = document.activeElement;
-                if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'BUTTON')) {
-                    scanInput.focus();
-                }
-            }, 50);
+        scanInput.addEventListener('keypress', e => { if(e.key==='Enter') { handleScan(scanInput.value.trim()); scanInput.value=''; } });
+        scanInput.addEventListener('blur', e => { 
+            if(!activeRowBarcode && (!e.relatedTarget || !['INPUT','BUTTON','SELECT'].includes(e.relatedTarget.tagName))) 
+                setTimeout(()=>scanInput.focus(), 50); 
         });
 
-        scanInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                const code = scanInput.value.trim();
-                scanInput.value = ''; 
-                processSelection(code, 'Scan');
-            }
-        });
-
-        function triggerSubmit(barcodeText) {
-            processSelection(barcodeText, 'ButtonTap');
-        }
-
-        function processSelection(code, method) {
-            const status = document.getElementById('status-msg');
-            let targetRow = null;
-            const allRows = Array.from(document.querySelectorAll('#pick-table tbody tr'));
-
-            // 1. Exact Barcode Match
-            targetRow = allRows.find(r => r.dataset.barcode === code);
+        // TRIGGERED BY SCANNER: Sets source to 'Scanner'
+        function handleScan(code) {
+            if(activeRowBarcode === code) { commitPick(activeRowBarcode); return; }
+            const rows = Array.from(document.querySelectorAll('#pick-table tbody tr'));
+            let row = rows.find(r => r.dataset.barcode === code) || rows.find(r => r.dataset.part.toLowerCase() === code.toLowerCase() && !r.classList.contains('picked')) || rows.find(r => r.dataset.part.toLowerCase().includes(code.toLowerCase()));
             
-            // 2. Part Number Match
-            if (!targetRow && method === 'Scan') {
-                targetRow = allRows.find(r => r.dataset.part === code && r.dataset.picked === "false");
-                if (!targetRow) targetRow = allRows.find(r => r.dataset.part === code);
-            }
-
-            if (targetRow) {
-                targetRow.classList.add('picked');
-                targetRow.dataset.picked = "true";
-                targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
-
-                const idParts = targetRow.id.split('-'); 
-                const inputID = `qty-${idParts[1]}-${idParts[2]}`;
-                const qtyVal = document.getElementById(inputID).value;
-
-                status.innerText = `OK: QTY ${qtyVal}`;
-                status.style.color = "green";
-                if(navigator.vibrate) navigator.vibrate(200);
-
-                const fullMsg = `Order:${currentOrder} Job:${currentJob} Part:${targetRow.dataset.part} (${method})`;
-                sendLog(code, 'Success', fullMsg, qtyVal);
-            } else {
-                document.body.className = 'wrong-scan';
-                status.innerText = "NO MATCH";
-                status.style.color = "red";
-                if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
-                setTimeout(() => document.body.className = '', 500);
-                
-                sendLog(code, 'Error', `Failed: ${code}`, 0);
-            }
+            if(!row) { showError("NO MATCH"); return; }
+            if(row.classList.contains('picked')) { showError("ALREADY PICKED"); return; }
+            activateRow(row.dataset.barcode, 'Scanner');
         }
 
-        function sendLog(barcode, status, message, qty) {
-            fetch('/api/log', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ barcode, status, message, selectedQty: qty })
-            }).catch(console.error);
+        // TRIGGERED BY CLICK: Sets source to 'Browser' (default) if not passed
+        function activateRow(bc, source = 'Browser') {
+            currentSource = source; // Store source for commit
+
+            document.querySelectorAll('tr').forEach(r => { 
+                r.classList.remove('active-pick'); 
+                const btn = r.querySelector('.btn-confirm');
+                if(btn) { btn.className = 'btn-select'; btn.innerText = 'Select'; btn.onclick = () => activateRow(r.dataset.barcode, 'Browser'); }
+            });
+            const row = document.querySelector(`tr[data-barcode="${bc}"]`);
+            if(!row) return;
+            
+            row.classList.add('active-pick'); row.scrollIntoView({behavior:"smooth", block:"center"});
+            const btn = row.querySelector('button[id^="act-"]');
+            btn.className = 'btn-confirm'; btn.innerText = 'CONFIRM'; btn.onclick = () => commitPick(bc);
+            
+            const [_, asm, mtl] = row.id.split('-');
+            const sel = document.getElementById(`sel-${asm}-${mtl}`);
+            const inp = document.getElementById(`qty-${asm}-${mtl}`);
+            if(inp.style.display !== 'none') { inp.focus(); inp.select(); } else sel.focus();
+            
+            document.getElementById('status-msg').innerText = "Check Qty & Tap CONFIRM";
+            activeRowBarcode = bc;
+        }
+
+        function commitPick(bc) {
+            const row = document.querySelector(`tr[data-barcode="${bc}"]`);
+            if(!row) return;
+            const [_, asm, mtl] = row.id.split('-');
+            const sel = document.getElementById(`sel-${asm}-${mtl}`);
+            const inp = document.getElementById(`qty-${asm}-${mtl}`);
+            const qty = parseFloat(inp.style.display !== 'none' ? inp.value : sel.value) || 0;
+            
+            const remCell = document.getElementById(`rem-${asm}-${mtl}`);
+            // Logic for Immediate Feedback: Subtract from current display, Poller will correct it
+            let newRem = Math.max(0, parseFloat(remCell.innerText) - qty);
+            remCell.innerText = newRem.toFixed(2);
+
+            const status = document.getElementById('status-msg');
+            
+            // Logic: Reset classes first
+            row.classList.remove('picked', 'partial-pick');
+
+            if(newRem <= 0) {
+                row.classList.add('picked'); remCell.style.color='green';
+                const btn = document.getElementById(`act-${asm}-${mtl}`);
+                btn.className='btn-select'; btn.disabled=true; btn.innerText='Done';
+                sel.disabled=true; inp.disabled=true;
+                status.innerText = `COMPLETED: ${row.dataset.part} - Qty: ${qty}`; status.style.color="green";
+            } else {
+                row.classList.add('partial-pick');
+                status.innerText = `PARTIAL: ${row.dataset.part} - Picked: ${qty} / Rem: ${newRem.toFixed(2)}`; status.style.color="blue";
+                inp.value = newRem.toFixed(2); 
+                if(sel.options.length>0) { sel.options[0].text=`All (${newRem.toFixed(2)})`; sel.options[0].value=newRem.toFixed(2); sel.selectedIndex=0; }
+                document.querySelectorAll('tr').forEach(r => r.classList.remove('active-pick'));
+            }
+
+            const msg = `Order:${currentOrder} Job:${currentJob} Part:${row.dataset.part} Source:${currentSource} | Qty: ${qty} | Req: ${row.dataset.req} | Iss: ${row.dataset.iss} | Rem: ${newRem.toFixed(2)} | User: ${currentNetworkID}`;
+            fetch('/api/log', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({barcode:bc, status:'Success', message:msg})}).catch(console.error);
+
+            activeRowBarcode = null;
+            setTimeout(() => document.getElementById('scan-input').focus(), 100);
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('status-msg');
+            el.innerText = msg; el.style.color = 'red';
+            document.body.className = 'wrong-scan'; setTimeout(()=>document.body.className='', 500);
         }
     </script>
 </body>

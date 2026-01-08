@@ -3,3 +3,34 @@ create a google account
 Scale Fusion 
 Connections with 
 
+1. Why it works on TC53e
+Card View: The 18:9 aspect ratio of the TC53e is tall and narrow. My code stacks the data vertically (Part # on top, Qty below), which prevents you from having to scroll horizontally.
+
+Virtual Keyboard Suppression: I included inputmode="none" on the scan input field. This tells the Chrome/Enterprise browser not to pop up the on-screen keyboard when you tap the box. This keeps your view clear for data.
+
+Focus Retention: The code includes a "blur" listener that forces the cursor to stay in the scan box. If you tap the screen by accident, the cursor will jump back to the input box automatically so the scanner is always ready.
+
+2. Critical Scanner Configuration (DataWedge)
+For the app to work seamlessly without you tapping "GO" every time, you must ensure the Zebra DataWedge profile is configured correctly to send an "Enter" key after every scan.
+
+Steps to configure your TC53e:
+
+Open the DataWedge app on the device.
+
+Select the profile you are using (usually Profile0 or create a new one for Chrome/Enterprise Browser).
+
+Scroll down to Keystroke Output.
+
+Tap Basic data formatting.
+
+Check the box for Send ENTER key.
+
+Without this setting, the scanner will fill the number into the box, but the app won't "submit" it until you manually tap the button.
+
+3. Fullscreen Mode (Optional)
+If you want to hide the browser address bar to get more space on the 6-inch screen, you can add this meta tag to the <head> of your index.html (and admin.html):
+
+HTML
+
+<meta name="mobile-web-app-capable" content="yes">
+When you open the page in Chrome on the Zebra device, tap the menu (three dots) and select "Add to Home Screen". Launching it from the home screen will now look like a native app without the URL bar.

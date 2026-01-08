@@ -4,74 +4,206 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aqua Picking Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f4f6f8; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
         h1 { margin: 0; color: #2c3e50; font-size: 1.8rem; }
-        .controls { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; }
-        input[type="text"] { padding: 10px; border: 1px solid #ddd; width: 300px; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .back-link { text-decoration: none; color: #6c757d; font-weight: bold; border: 1px solid #ddd; padding: 5px 10px; border-radius: 4px; background: white; margin-right: 15px; }
         
-        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #343a40; color: white; }
+        .controls { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        input[type="text"] { padding: 10px; width: 300px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-reset { background-color: #dc3545; margin-left: auto; }
+
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #eee; vertical-align: middle; }
+        th { background: #343a40; color: white; font-size: 0.8rem; text-transform: uppercase; }
         
-        .badge { padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; }
         .badge-success { background: #d4edda; color: #155724; }
         .badge-error { background: #f8d7da; color: #721c24; }
-        .code-cell { font-family: monospace; font-weight: bold; background: #f8f9fa; padding: 4px; border: 1px solid #ddd; }
+        .col-qty { font-weight: bold; color: #007bff; text-align: center; }
+        .barcode-svg { height: 20px; display: block; }
+
+        #loader-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.85); backdrop-filter:blur(4px); z-index:10000; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:opacity 0.5s; }
+        #loader-overlay.hidden { opacity: 0; visibility: hidden; }
+        .ripple-loader { position: relative; width: 80px; height: 80px; }
+        .ripple-loader div { position: absolute; border: 4px solid #007bff; opacity: 1; border-radius: 50%; animation: ripple 1.2s cubic-bezier(0,0.2,0.8,1) infinite; }
+        .ripple-loader div:nth-child(2) { animation-delay: -0.5s; }
+        @keyframes ripple { 0% { top:36px; left:36px; width:0; height:0; opacity:0; } 5% { opacity:1; } 100% { top:0px; left:0px; width:72px; height:72px; opacity:0; } }
+
+        @media (max-width: 768px) {
+            .controls { flex-direction: column; } input[type="text"] { width: 100%; }
+            table, thead, tbody, th, td, tr { display: block; }
+            thead tr { position: absolute; top: -9999px; left: -9999px; }
+            tr { margin-bottom: 20px; border-radius: 8px; background: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 15px; border-left: 6px solid #ddd; }
+            tr.card-success { border-left-color: #28a745; } tr.card-error { border-left-color: #dc3545; }
+            td { border: none; border-bottom: 1px solid #f0f0f0; position: relative; padding-left: 45% !important; text-align: right !important; }
+            td:before { position: absolute; left: 0px; width: 40%; text-align: left; font-weight: 700; color: #555; text-transform: uppercase; font-size: 0.7rem; content: attr(data-label); }
+        }
     </style>
 </head>
 <body>
+    <div id="loader-overlay"><div class="ripple-loader"><div></div><div></div></div><div style="margin-top:20px;font-weight:bold;color:#007bff;">Loading Data...</div></div>
+
     <div class="header">
-        <h1>📊 Picking Floor Activity</h1>
-        <div id="last-updated">Waiting...</div>
+        <div style="display:flex; align-items:center;">
+            <a href="index.html" class="back-link">← Scanner App</a>
+            <h1>📊 Picking Floor Activity</h1>
+        </div>
+        <div id="last-updated" style="color:#666; font-weight:bold;">Initializing...</div>
     </div>
+    
     <div class="controls">
-        <input type="text" id="search-box" placeholder="Search..." onkeyup="filterTable()">
-        <button onclick="loadLogs()">🔄 Refresh</button>
+        <input type="text" id="search-box" placeholder="Search Logs..." onkeyup="filterTable()">
+        <button onclick="loadLogs(true)">🔄 Refresh</button>
+        <button onclick="resetLogs()" class="btn-reset">⚠️ Reset Logs</button>
     </div>
+
     <table>
         <thead>
             <tr>
-                <th style="width: 160px;">Time</th>
-                <th style="width: 100px;">Status</th>
-                <th style="width: 180px;">Scanned Code</th>
-                <th>Details (Job / Part / Qty)</th>
+                <th style="width: 140px;">Time</th>
+                <th style="width: 60px;">Status</th>
+                <th style="width: 80px;">AQUA ID</th>
+                <th style="width: 130px;">Scanned Code</th>
+                <th style="width: 80px;">BarCode</th> 
+                <th style="width: 40px;">ASM</th>
+                <th style="width: 40px;">SEQ</th>
+                <th style="width: 70px;">ORD</th>
+                <th style="width: 70px;">JOB</th>
+                <th>PRT</th>
+                <th style="width: 50px; text-align:center;">REQ</th>
+                <th style="width: 50px; text-align:center;">ISS</th>
+                <th style="width: 60px; text-align:center;">PICKED</th>
+                <th style="width: 50px; text-align:center;">REM</th>
+                <th style="width: 80px; text-align:center;">DEVICE</th>
             </tr>
         </thead>
         <tbody id="logs-body"></tbody>
     </table>
+
     <script>
-        async function loadLogs() {
+        let allLogs = [];
+        let lastDataHash = "";
+        
+        async function loadLogs(isInitialLoad = false) {
+            const loader = document.getElementById('loader-overlay');
+            if(isInitialLoad) loader.classList.remove('hidden');
+
             try {
                 const res = await fetch('/api/logs');
-                const logs = await res.json();
-                const tbody = document.getElementById('logs-body');
-                tbody.innerHTML = '';
-                logs.forEach(log => {
-                    const row = document.createElement('tr');
-                    let badge = log.ScanStatus === 'Success' ? 'badge-success' : 'badge-error';
-                    row.innerHTML = `
-                        <td style="color:#555;">${new Date(log.ScanTime).toLocaleString()}</td>
-                        <td><span class="badge ${badge}">${log.ScanStatus}</span></td>
-                        <td><span class="code-cell">${log.BarcodeScanned}</span></td>
-                        <td>${log.Message}</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-                filterTable();
+                if (!res.ok) throw new Error(`Server ${res.status}`);
+                
+                const rawText = await res.text();
+                if(!isInitialLoad && rawText === lastDataHash) {
+                    document.getElementById('last-updated').innerText = "Live: " + new Date().toLocaleTimeString();
+                    return;
+                }
+                lastDataHash = rawText;
+
+                let logs = [];
+                try { logs = JSON.parse(rawText); } catch(e) {}
+                
+                if (!Array.isArray(logs)) logs = [];
+                renderTable(logs);
                 document.getElementById('last-updated').innerText = "Updated: " + new Date().toLocaleTimeString();
-            } catch (err) { console.error(err); }
+            } catch (err) { 
+                console.error(err);
+                if(isInitialLoad) document.getElementById('logs-body').innerHTML = `<tr><td colspan="15" style="text-align:center;color:red;padding:20px;">⚠️ Connection Failed</td></tr>`;
+            } finally {
+                if(isInitialLoad) setTimeout(() => loader.classList.add('hidden'), 500);
+            }
         }
+
+        async function resetLogs() {
+            if (!confirm("Delete ALL logs?")) return;
+            if (prompt("Admin Passcode:") !== "1234") return alert("Incorrect");
+            try { await fetch('/api/logs', { method: 'DELETE' }); lastDataHash = ""; loadLogs(true); } catch(e){ alert("Error"); }
+        }
+
+        function renderTable(logs) {
+            const tbody = document.getElementById('logs-body');
+            
+            const fragment = document.createDocumentFragment();
+            const sortedLogs = [...logs].reverse();
+
+            if(sortedLogs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:20px;">No logs found.</td></tr>'; 
+                return; 
+            }
+
+            sortedLogs.forEach((log, i) => {
+                const row = document.createElement('tr');
+                row.classList.add(log.ScanStatus === 'Success' ? 'card-success' : 'card-error');
+                const badge = log.ScanStatus === 'Success' ? 'badge-success' : 'badge-error';
+                
+                let user='-', ord='-', job='-', prt='-', req='-', iss='-', qty='-', rem='-', src='-';
+                
+                try {
+                    const msg = log.Message;
+                    
+                    const mOrd = msg.match(/Order:\s*([^\s]+)/);
+                    if(mOrd) ord = mOrd[1];
+
+                    const mJob = msg.match(/Job:\s*([^\s]+)/);
+                    if(mJob) job = mJob[1];
+
+                    const mPrt = msg.match(/Part:\s*(.+?)(\s*Source:|\s*\||$)/);
+                    if(mPrt) prt = mPrt[1].trim();
+
+                    const mSrc = msg.match(/Source:\s*([^\s|]+)/);
+                    if(mSrc) src = mSrc[1];
+
+                    const mUser = msg.match(/User:\s*(.*)/);
+                    if(mUser) user = mUser[1].trim();
+
+                    const mQty = msg.match(/Qty:\s*([\d\.]+)/); if(mQty) qty = mQty[1];
+                    const mReq = msg.match(/Req:\s*([\d\.]+)/); if(mReq) req = mReq[1];
+                    const mIss = msg.match(/Iss:\s*([\d\.]+)/); if(mIss) iss = mIss[1];
+                    const mRem = msg.match(/Rem:\s*([\d\.]+)/); if(mRem) rem = mRem[1];
+
+                } catch(e) { console.error("Parse Error on row " + i, e); }
+
+                const asmMatch = (log.BarcodeScanned||"").match(/^A(\d+)~S(\d+)~/);
+                const asm = asmMatch ? asmMatch[1] : '-';
+                const seq = asmMatch ? asmMatch[2] : '-';
+
+                row.innerHTML = `
+                    <td data-label="Time" style="color:#666;font-size:0.85em;">${new Date(log.ScanTime).toLocaleString()}</td>
+                    <td data-label="Status"><span class="badge ${badge}">${log.ScanStatus}</span></td>
+                    <td data-label="Aqua ID" style="font-weight:bold;color:#d63384;">${user}</td>
+                    <td data-label="Scanned" class="col-code">${log.BarcodeScanned}</td>
+                    <td data-label="Barcode"><svg id="bc-${i}" class="barcode-svg"></svg></td>
+                    <td data-label="ASM">${asm}</td><td data-label="SEQ">${seq}</td>
+                    <td data-label="ORD"><strong>${ord}</strong></td><td data-label="JOB">${job}</td>
+                    <td data-label="PRT" style="font-weight:bold;">${prt}</td>
+                    <td data-label="REQ" class="col-extra">${req}</td><td data-label="ISS" class="col-extra">${iss}</td>
+                    <td data-label="PICKED" class="col-qty">${qty}</td>
+                    <td data-label="REM" class="col-extra" style="color:#007bff;font-weight:bold;">${rem}</td>
+                    <td data-label="DEVICE" style="text-align:center;font-weight:bold;color:#555;">${src}</td>
+                `;
+                fragment.appendChild(row);
+            });
+
+            tbody.innerHTML = '';
+            tbody.appendChild(fragment);
+
+            sortedLogs.forEach((log, i) => {
+                try { if(log.BarcodeScanned) JsBarcode("#bc-"+i, log.BarcodeScanned, {format:"CODE128", width:1, height:20, displayValue:false, margin:0}); } catch(e){}
+            });
+            
+            filterTable();
+        }
+
         function filterTable() {
             const term = document.getElementById('search-box').value.toLowerCase();
-            document.querySelectorAll('#logs-body tr').forEach(row => {
-                row.style.display = row.innerText.toLowerCase().includes(term) ? '' : 'none';
-            });
+            document.querySelectorAll('#logs-body tr').forEach(r => r.style.display = r.innerText.toLowerCase().includes(term) ? '' : 'none');
         }
-        loadLogs();
-        setInterval(loadLogs, 5000);
+
+        loadLogs(true);
+        setInterval(() => loadLogs(false), 5000);
     </script>
 </body>
 </html>
