@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aqua Picking Monitor</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; background: #f4f6f8; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h1 { margin: 0; color: #2c3e50; font-size: 1.8rem; }
+        .controls { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 10px; }
+        input[type="text"] { padding: 10px; border: 1px solid #ddd; width: 300px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+        
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #343a40; color: white; }
+        
+        .badge { padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-error { background: #f8d7da; color: #721c24; }
+        .code-cell { font-family: monospace; font-weight: bold; background: #f8f9fa; padding: 4px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Picking Floor Activity</h1>
+        <div id="last-updated">Waiting...</div>
+    </div>
+    <div class="controls">
+        <input type="text" id="search-box" placeholder="Search..." onkeyup="filterTable()">
+        <button onclick="loadLogs()">🔄 Refresh</button>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 160px;">Time</th>
+                <th style="width: 100px;">Status</th>
+                <th style="width: 180px;">Scanned Code</th>
+                <th>Details (Job / Part / Qty)</th>
+            </tr>
+        </thead>
+        <tbody id="logs-body"></tbody>
+    </table>
+    <script>
+        async function loadLogs() {
+            try {
+                const res = await fetch('/api/logs');
+                const logs = await res.json();
+                const tbody = document.getElementById('logs-body');
+                tbody.innerHTML = '';
+                logs.forEach(log => {
+                    const row = document.createElement('tr');
+                    let badge = log.ScanStatus === 'Success' ? 'badge-success' : 'badge-error';
+                    row.innerHTML = `
+                        <td style="color:#555;">${new Date(log.ScanTime).toLocaleString()}</td>
+                        <td><span class="badge ${badge}">${log.ScanStatus}</span></td>
+                        <td><span class="code-cell">${log.BarcodeScanned}</span></td>
+                        <td>${log.Message}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                filterTable();
+                document.getElementById('last-updated').innerText = "Updated: " + new Date().toLocaleTimeString();
+            } catch (err) { console.error(err); }
+        }
+        function filterTable() {
+            const term = document.getElementById('search-box').value.toLowerCase();
+            document.querySelectorAll('#logs-body tr').forEach(row => {
+                row.style.display = row.innerText.toLowerCase().includes(term) ? '' : 'none';
+            });
+        }
+        loadLogs();
+        setInterval(loadLogs, 5000);
+    </script>
+</body>
+</html>

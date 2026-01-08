@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aqua Job Picker</title>
+    <style>
+        body { font-family: sans-serif; padding: 5px; text-align: center; background-color: #f8f9fa; }
+        
+        /* Global Input Style (for Order Scan) */
+        input { width: 90%; padding: 15px; font-size: 1.2rem; border: 2px solid #007bff; border-radius: 5px; margin-bottom: 10px; }
+        
+        /* Buttons */
+        .btn-main { padding: 15px; width: 95%; background: #007bff; color: white; font-size: 1.2rem; border: none; border-radius: 5px; margin-top: 10px; }
+        .btn-job { padding: 15px; width: 100%; background: white; border: 1px solid #ddd; margin-bottom: 10px; text-align: left; font-size: 1.1rem; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .btn-back { padding: 8px 15px; background: #6c757d; color: white; border: none; border-radius: 4px; float: left; margin-bottom: 10px; }
+        
+        /* GO Button */
+        .btn-go {
+            background-color: #007bff; color: white;
+            border: none; border-radius: 4px;
+            padding: 8px 12px;
+            font-weight: bold; font-size: 1rem;
+            cursor: pointer;
+        }
+        .btn-go:active { background-color: #0056b3; }
+
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; background: white; font-size: 0.80rem; table-layout: fixed; }
+        th, td { border: 1px solid #ddd; padding: 3px; text-align: center; vertical-align: middle; word-wrap: break-word; }
+        th { background-color: #343a40; color: white; }
+        td { text-align: center; } 
+        td.part-cell { text-align: left; } 
+        
+        /* --- FIXED: WIDER QUANTITY INPUT --- */
+        .qty-input { 
+            width: 70px; /* Increased from 40px */
+            padding: 5px; 
+            font-size: 1.1rem; 
+            text-align: center; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+        }
+
+        /* Pick States */
+        tr.picked { background-color: #d4edda !important; } 
+        tr.wrong-scan { animation: flashRed 0.5s; }
+
+        .screen { display: none; }
+        .active { display: block; }
+        @keyframes flashRed { 0% { background-color: #f8d7da; } 100% { background-color: #f8f9fa; } }
+    </style>
+</head>
+<body>
+
+    <div id="screen-order" class="screen active" style="margin-top: 50px;">
+        <h2>Job Material Picker</h2>
+        <input type="number" id="order-input" placeholder="Scan or Enter Order Number" autofocus>
+        <button onclick="fetchJobs()" class="btn-main">FIND JOBS</button>
+    </div>
+
+    <div id="screen-jobs" class="screen">
+        <button onclick="showScreen('screen-order')" class="btn-back">← Back</button>
+        <h3>Order: <span id="display-order"></span></h3>
+        <div id="job-list-container"></div>
+    </div>
+
+    <div id="screen-picking" class="screen">
+        <button onclick="showScreen('screen-jobs')" class="btn-back">← Jobs</button>
+        <div style="clear:both; margin-bottom:5px;">
+            <h3 style="margin:0;">Job: <span id="display-job"></span></h3>
+        </div>
+
+        <input type="text" id="scan-input" inputmode="none" placeholder="Scan Barcode..." autocomplete="off">
+        <div id="status-msg" style="font-weight:bold; height:20px;"></div>
+
+        <table id="pick-table">
+            <thead>
+                <tr>
+                    <th style="width: 30px;">Ln</th>
+                    <th style="width: 30px;">Asm</th>
+                    <th style="width: 30px;">Mtl</th>
+                    <th>Part / Barcode</th> <th style="width: 35px;">Req</th>
+                    <th style="width: 35px;">Iss</th>
+                    <th style="width: 80px;">Pick</th>
+                    <th style="width: 45px;">ACT</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        let currentOrder = '';
+        let currentJob = '';
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        async function fetchJobs() {
+            const orderNum = document.getElementById('order-input').value;
+            if(!orderNum) return;
+            currentOrder = orderNum;
+            try {
+                const res = await fetch(`/api/jobs/${orderNum}`);
+                const data = await res.json();
+                if (data.success) renderJobs(data.data);
+                else alert(data.message);
+            } catch (err) { alert("Network Error"); }
+        }
+
+        function renderJobs(jobs) {
+            const container = document.getElementById('job-list-container');
+            container.innerHTML = '';
+            document.getElementById('display-order').innerText = currentOrder;
+            jobs.forEach(job => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-job';
+                btn.innerText = `Job: ${job.JobNum}`;
+                btn.onclick = () => loadPickList(job.JobNum);
+                container.appendChild(btn);
+            });
+            showScreen('screen-jobs');
+        }
+
+        async function loadPickList(jobNum) {
+            currentJob = jobNum;
+            try {
+                const res = await fetch(`/api/picklist/${currentOrder}/${jobNum}`);
+                const data = await res.json();
+                if (data.success) renderTable(data.data);
+                else alert("No parts found.");
+            } catch (err) { alert("Network Error"); }
+        }
+
+        function renderTable(parts) {
+            document.getElementById('display-job').innerText = currentJob;
+            const tbody = document.querySelector('#pick-table tbody');
+            tbody.innerHTML = '';
+
+            parts.forEach(part => {
+                const row = document.createElement('tr');
+                const barcodeText = `A${part.AssemblySeq}-M${part.MtlSeq}-${part.PartNum}`;
+                const rowID = `row-${part.AssemblySeq}-${part.MtlSeq}`;
+                const inputID = `qty-${part.AssemblySeq}-${part.MtlSeq}`;
+                const safeBarcodeUrl = encodeURIComponent(barcodeText);
+                
+                let desc = part.detDescription || '';
+                if (desc.length > 75) desc = desc.substring(0, 75) + '...';
+
+                row.id = rowID;
+                row.dataset.barcode = barcodeText;
+                row.dataset.part = part.PartNum;
+                row.dataset.picked = "false";
+
+                row.innerHTML = `
+                    <td style="font-weight:bold;">${part.OrderLine}</td>
+                    <td>${part.AssemblySeq}</td>
+                    <td>${part.MtlSeq}</td>
+                    <td class="part-cell">
+                        <div style="font-weight:bold;">${part.PartNum}</div>
+                        <div style="font-size:0.75em; color:#555;">${desc}</div>
+                        <img src="http://aquaerpapp/barcodes/idautomation-code128.aspx?D=${safeBarcodeUrl}&ST=T" 
+                             style="height:35px; margin-top:5px; max-width:100%;" loading="lazy">
+                    </td>
+                    <td>${parseFloat(part.RequiredQty).toFixed(2)}</td>
+                    <td style="color:#666;">${parseFloat(part.IssuedQty).toFixed(2)}</td>
+                    <td>
+                        <input type="number" id="${inputID}" class="qty-input" 
+                               value="${parseFloat(part.RequiredQty).toFixed(2)}" 
+                               step="1" min="0">
+                    </td>
+                    <td>
+                        <button class="btn-go" onclick="triggerSubmit('${barcodeText}')">GO</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            showScreen('screen-picking');
+            setTimeout(() => document.getElementById('scan-input').focus(), 100);
+        }
+
+        const scanInput = document.getElementById('scan-input');
+        
+        // Smart Focus Logic: Don't steal focus if user clicks Input/Button
+        scanInput.addEventListener('blur', (e) => {
+            const newTarget = e.relatedTarget;
+            if (newTarget && (newTarget.tagName === 'INPUT' || newTarget.tagName === 'BUTTON')) {
+                return;
+            }
+            setTimeout(() => {
+                const active = document.activeElement;
+                if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'BUTTON')) {
+                    scanInput.focus();
+                }
+            }, 50);
+        });
+
+        scanInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const code = scanInput.value.trim();
+                scanInput.value = ''; 
+                processSelection(code, 'Scan');
+            }
+        });
+
+        function triggerSubmit(barcodeText) {
+            processSelection(barcodeText, 'ButtonTap');
+        }
+
+        function processSelection(code, method) {
+            const status = document.getElementById('status-msg');
+            let targetRow = null;
+            const allRows = Array.from(document.querySelectorAll('#pick-table tbody tr'));
+
+            // 1. Exact Barcode Match
+            targetRow = allRows.find(r => r.dataset.barcode === code);
+            
+            // 2. Part Number Match
+            if (!targetRow && method === 'Scan') {
+                targetRow = allRows.find(r => r.dataset.part === code && r.dataset.picked === "false");
+                if (!targetRow) targetRow = allRows.find(r => r.dataset.part === code);
+            }
+
+            if (targetRow) {
+                targetRow.classList.add('picked');
+                targetRow.dataset.picked = "true";
+                targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+
+                const idParts = targetRow.id.split('-'); 
+                const inputID = `qty-${idParts[1]}-${idParts[2]}`;
+                const qtyVal = document.getElementById(inputID).value;
+
+                status.innerText = `OK: QTY ${qtyVal}`;
+                status.style.color = "green";
+                if(navigator.vibrate) navigator.vibrate(200);
+
+                const fullMsg = `Order:${currentOrder} Job:${currentJob} Part:${targetRow.dataset.part} (${method})`;
+                sendLog(code, 'Success', fullMsg, qtyVal);
+            } else {
+                document.body.className = 'wrong-scan';
+                status.innerText = "NO MATCH";
+                status.style.color = "red";
+                if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                setTimeout(() => document.body.className = '', 500);
+                
+                sendLog(code, 'Error', `Failed: ${code}`, 0);
+            }
+        }
+
+        function sendLog(barcode, status, message, qty) {
+            fetch('/api/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ barcode, status, message, selectedQty: qty })
+            }).catch(console.error);
+        }
+    </script>
+</body>
+</html>
